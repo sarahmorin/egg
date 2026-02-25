@@ -168,7 +168,7 @@ pub trait Language: Debug + Clone + Eq + Ord + Hash {
     /// let mut egraph = EGraph::<SymbolLang, ()>::default();
     /// let expr = "(foo (bar1 (bar2 (bar3 baz))))".parse().unwrap();
     /// let root = egraph.add_expr(&expr);
-    /// let get_first_enode = |id| egraph[id].nodes[0].clone();
+    /// let get_first_enode = |id| egraph[id].nodes[0].1.clone();
     /// let expr2 = get_first_enode(root).build_recexpr(get_first_enode);
     /// assert_eq!(expr, expr2)
     /// ```

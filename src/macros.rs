@@ -340,7 +340,7 @@ fn is_not_zero(var: &'static str) -> impl Fn(&mut EGraph, Id, &Subst) -> bool {
     // note this check is just an example,
     // checking for the absence of 0 is insufficient since 0 could be merged in later
     // see https://github.com/egraphs-good/egg/issues/297
-    move |egraph, _, subst| !egraph[subst[var]].nodes.contains(&zero)
+    move |egraph, _, subst| !egraph[subst[var]].nodes.iter().any(|(_, n)| *n == zero)
 }
 ```
 

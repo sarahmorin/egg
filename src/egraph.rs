@@ -151,6 +151,21 @@ impl<L: Language, N: Analysis<L>> EGraph<L, N> {
         &self.nodes
     }
 
+    /// Retrieve an eclass by id.
+    pub fn get_class(&self, id: Id) -> &EClass<L, N::Data> {
+        &self.classes[&self.find(id)]
+    }
+
+    /// Returns an iterator over the nodes in a given eclass
+    pub fn nodes_in_class(&self, id: Id) -> impl ExactSizeIterator<Item = (Id, &L)> {
+        self.get_class(id).iter_with_ids()
+    }
+
+    /// Retrieve an enode by id.
+    pub fn get_node(&self, id: Id) -> &L {
+        &self.nodes[usize::from(id)]
+    }
+
     /// Returns `true` if the egraph is empty
     /// # Example
     /// ```
@@ -330,8 +345,8 @@ impl<L: Language, N: Analysis<L>> EGraph<L, N> {
         product_map: &mut HashMap<(Id, Id), Id>,
     ) {
         let res_id = Self::get_product_id(class1, class2, product_map);
-        for node1 in &self.classes[&class1].nodes {
-            for node2 in &other.classes[&class2].nodes {
+        for (_, node1) in &self.classes[&class1].nodes {
+            for (_, node2) in &other.classes[&class2].nodes {
                 if node1.matches(node2) {
                     let children1 = node1.children();
                     let children2 = node2.children();
@@ -612,7 +627,7 @@ where
             nodes: src_eclass
                 .nodes
                 .into_iter()
-                .map(|l| self.map_node(l))
+                .map(|(id, l)| (id, self.map_node(l)))
                 .collect(),
             data: self.map_data(src_eclass.data),
             parents: src_eclass.parents,
@@ -1030,13 +1045,20 @@ impl<L: Language, N: Analysis<L>> EGraph<L, N> {
         }
     }
 
+    /// Similar to `add` but returns the id and a flag indicating whether a new eclass was created
+    pub fn add_with_flag(&mut self, enode: L) -> (Id, bool) {
+        let id = self.add_uncanonical(enode);
+        let is_new = self.find(id) == id;
+        (self.find(id), is_new)
+    }
+
     /// This function makes a new eclass in the egraph (but doesn't touch explanations)
     fn make_new_eclass(&mut self, enode: L, original: L) -> Id {
         let id = self.unionfind.make_set();
         log::trace!("  ...adding to {}", id);
         let class = EClass {
             id,
-            nodes: vec![enode.clone()],
+            nodes: vec![(id, enode.clone())],
             data: N::make(self, &original, id),
             parents: Default::default(),
         };
@@ -1256,9 +1278,9 @@ impl<L: Language, N: Analysis<L>> EGraph<L, N> {
             class
                 .nodes
                 .iter_mut()
-                .for_each(|n| n.update_children(|id| uf.find_mut(id)));
-            class.nodes.sort_unstable();
-            class.nodes.dedup();
+                .for_each(|(_, n)| n.update_children(|id| uf.find_mut(id)));
+            class.nodes.sort_unstable_by(|a, b| a.1.cmp(&b.1));
+            class.nodes.dedup_by(|a, b| a.1 == b.1);
 
             trimmed += old_len - class.nodes.len();
 
@@ -1272,9 +1294,10 @@ impl<L: Language, N: Analysis<L>> EGraph<L, N> {
             // we can go through the ops in order to dedup them, becaue we
             // just sorted them
             let mut nodes = class.nodes.iter();
-            if let Some(mut prev) = nodes.next() {
-                add(prev);
-                for n in nodes {
+            if let Some((_, first)) = nodes.next() {
+                add(first);
+                let mut prev = first;
+                for (_, n) in nodes {
                     if !prev.matches(n) {
                         add(n);
                         prev = n;
@@ -1299,7 +1322,7 @@ impl<L: Language, N: Analysis<L>> EGraph<L, N> {
 
         for (&id, class) in self.classes.iter() {
             assert_eq!(class.id, id);
-            for node in &class.nodes {
+            for (_, node) in &class.nodes {
                 if let Some(old) = test_memo.insert(node, id) {
                     assert_eq!(
                         self.find(old),
@@ -1448,7 +1471,7 @@ impl<'a, L: Language, N: Analysis<L>> Debug for EGraphDump<'a, L, N> {
         ids.sort();
         for id in ids {
             let mut nodes = self.0[id].nodes.clone();
-            nodes.sort();
+            nodes.sort_by(|a, b| a.1.cmp(&b.1));
             writeln!(f, "{} ({:?}): {:?}", id, self.0[id].data, nodes)?
         }
         Ok(())

@@ -96,7 +96,7 @@ impl Analysis<Math> for ConstantFold {
                 egraph.union(id, added);
             }
             // to not prune, comment this out
-            egraph[id].nodes.retain(|n| n.is_leaf());
+            egraph[id].nodes.retain(|(_, n)| n.is_leaf());
 
             #[cfg(debug_assertions)]
             egraph[id].assert_unique_leaves();
@@ -113,7 +113,7 @@ fn is_const_or_distinct_var(v: &str, w: &str) -> impl Fn(&mut EGraph, Id, &Subst
                 || egraph[subst[v]]
                     .nodes
                     .iter()
-                    .any(|n| matches!(n, Math::Symbol(..))))
+                    .any(|(_, n)| matches!(n, Math::Symbol(..))))
     }
 }
 
@@ -128,7 +128,7 @@ fn is_sym(var: &str) -> impl Fn(&mut EGraph, Id, &Subst) -> bool {
         egraph[subst[var]]
             .nodes
             .iter()
-            .any(|n| matches!(n, Math::Symbol(..)))
+            .any(|(_, n)| matches!(n, Math::Symbol(..)))
     }
 }
 

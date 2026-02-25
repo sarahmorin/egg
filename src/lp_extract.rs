@@ -284,7 +284,7 @@ where
                 .iter()
                 .position(|&n| solution.value(n) > 0.0)
                 .unwrap();
-            let node = &self.egraph[id].nodes[node_idx];
+            let node = &self.egraph[id].nodes[node_idx].1;
             if node.all(|child| ids.contains_key(&child)) {
                 let new_id = expr.add(node.clone().map_children(|i| ids[&self.egraph.find(i)]));
                 ids.insert(id, new_id);

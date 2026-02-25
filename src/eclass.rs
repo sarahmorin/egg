@@ -11,7 +11,8 @@ pub struct EClass<L, D> {
     /// This eclass's id.
     pub id: Id,
     /// The equivalent enodes in this equivalence class.
-    pub nodes: Vec<L>,
+    /// Each node is paired with its unique node Id.
+    pub nodes: Vec<(Id, L)>,
     /// The analysis data associated with this eclass.
     ///
     /// Modifying this field will _not_ cause changes to propagate through the e-graph.
@@ -34,7 +35,17 @@ impl<L, D> EClass<L, D> {
 
     /// Iterates over the enodes in this eclass.
     pub fn iter(&self) -> impl ExactSizeIterator<Item = &L> {
-        self.nodes.iter()
+        self.nodes.iter().map(|(_, node)| node)
+    }
+
+    /// Iterates over the node Ids in this eclass.
+    pub fn node_ids(&self) -> impl ExactSizeIterator<Item = Id> + '_ {
+        self.nodes.iter().map(|(id, _)| *id)
+    }
+
+    /// Iterates over (node_id, enode) pairs in this eclass.
+    pub fn iter_with_ids(&self) -> impl ExactSizeIterator<Item = (Id, &L)> + '_ {
+        self.nodes.iter().map(|(id, node)| (*id, node))
     }
 
     /// Iterates over the non-canonical ids of parent enodes of this eclass.
@@ -46,7 +57,7 @@ impl<L, D> EClass<L, D> {
 impl<L: Language, D> EClass<L, D> {
     /// Iterates over the childless enodes in this eclass.
     pub fn leaves(&self) -> impl Iterator<Item = &L> {
-        self.nodes.iter().filter(|&n| n.is_leaf())
+        self.nodes.iter().map(|(_, n)| n).filter(|&n| n.is_leaf())
     }
 
     /// Asserts that the childless enodes in this eclass are unique.
@@ -77,15 +88,16 @@ impl<L: Language, D> EClass<L, D> {
         if self.nodes.len() < 50 {
             self.nodes
                 .iter()
+                .map(|(_, n)| n)
                 .filter(|n| node.matches(n))
                 .try_for_each(f)
         } else {
             debug_assert!(node.all(|id| id == Id::from(0)));
-            debug_assert!(self.nodes.windows(2).all(|w| w[0] < w[1]));
-            let mut start = self.nodes.binary_search(node).unwrap_or_else(|i| i);
+            debug_assert!(self.nodes.windows(2).all(|w| w[0].1 < w[1].1));
+            let mut start = self.nodes.binary_search_by_key(&node, |(_, n)| n).unwrap_or_else(|i| i);
             let discrim = node.discriminant();
             while start > 0 {
-                if self.nodes[start - 1].discriminant() == discrim {
+                if self.nodes[start - 1].1.discriminant() == discrim {
                     start -= 1;
                 } else {
                     break;
@@ -93,17 +105,19 @@ impl<L: Language, D> EClass<L, D> {
             }
             let mut matching = self.nodes[start..]
                 .iter()
+                .map(|(_, n)| n)
                 .take_while(|&n| n.discriminant() == discrim)
                 .filter(|n| node.matches(n));
             debug_assert_eq!(
                 matching.clone().count(),
-                self.nodes.iter().filter(|n| node.matches(n)).count(),
+                self.nodes.iter().map(|(_, n)| n).filter(|n| node.matches(n)).count(),
                 "matching node {:?}\nstart={}\n{:?} != {:?}\nnodes: {:?}",
                 node,
                 start,
                 matching.clone().collect::<HashSet<_>>(),
                 self.nodes
                     .iter()
+                    .map(|(_, n)| n)
                     .filter(|n| node.matches(n))
                     .collect::<HashSet<_>>(),
                 self.nodes
