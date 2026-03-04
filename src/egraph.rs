@@ -1047,8 +1047,9 @@ impl<L: Language, N: Analysis<L>> EGraph<L, N> {
 
     /// Similar to `add` but returns the id and a flag indicating whether a new eclass was created
     pub fn add_with_flag(&mut self, enode: L) -> (Id, bool) {
+        let curr_max_id = self.unionfind.size();
         let id = self.add_uncanonical(enode);
-        let is_new = self.find(id) == id;
+        let is_new = self.unionfind.size() > curr_max_id;
         (self.find(id), is_new)
     }
 
@@ -1432,7 +1433,7 @@ impl<L: Language, N: Analysis<L>> EGraph<L, N> {
         let trimmed_nodes = self.rebuild_classes();
 
         let elapsed = start.elapsed();
-        info!(
+        trace!(
             concat!(
                 "REBUILT! in {}.{:03}s\n",
                 "  Old: hc size {}, eclasses: {}\n",
