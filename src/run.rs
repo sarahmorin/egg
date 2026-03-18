@@ -153,6 +153,8 @@ pub struct Runner<L: Language, N: Analysis<L>, IterData = ()> {
 
     limits: RunnerLimits,
     scheduler: Box<dyn RewriteScheduler<L, N>>,
+    #[cfg(feature = "rerun-metrics")]
+    rerun_metrics: metrics::RerunStream,
 }
 
 /// Describes the limits that would stop a [`Runner`].
@@ -215,16 +217,20 @@ where
             hooks,
             limits,
             scheduler: _,
+            #[cfg(feature = "rerun-metrics")]
+            rerun_metrics,
         } = self;
 
-        f.debug_struct("Runner")
-            .field("egraph", egraph)
+        let mut dbg = f.debug_struct("Runner");
+        dbg.field("egraph", egraph)
             .field("iterations", iterations)
             .field("roots", roots)
             .field("stop_reason", stop_reason)
             .field("hooks", &vec![format_args!("<dyn FnMut ..>"); hooks.len()])
-            .field("limits", limits)
-            .field("scheduler", &format_args!("<dyn RewriteScheduler ..>"))
+            .field("limits", limits);
+        #[cfg(feature = "rerun-metrics")]
+        dbg.field("rerun_metrics", &rerun_metrics.is_some());
+        dbg.field("scheduler", &format_args!("<dyn RewriteScheduler ..>"))
             .finish()
     }
 }
@@ -350,7 +356,18 @@ where
             stop_reason: None,
             hooks: vec![],
             scheduler: Box::new(BackoffScheduler::default()),
+            #[cfg(feature = "rerun-metrics")]
+            rerun_metrics: None,
         }
+    }
+
+    /// Enable per-iteration and final run scalar logging using a caller-provided recording stream.
+    ///
+    /// Requires feature `rerun-metrics`.
+    #[cfg(feature = "rerun-metrics")]
+    pub fn with_rerun_metrics(mut self, rec: metrics::RerunStream) -> Self {
+        self.rerun_metrics = rec;
+        self
     }
 
     /// Sets the iteration limit. Default: 30
@@ -442,6 +459,15 @@ where
         loop {
             let iter = self.run_one(&rules);
             self.iterations.push(iter);
+
+            #[cfg(feature = "rerun-metrics")]
+            {
+                let iter_index = self.iterations.len() - 1;
+                let iter = self.iterations.last().unwrap();
+                let report = self.report();
+                metrics::log_rerun_iteration(&self.rerun_metrics, iter_index, iter, &report);
+            }
+
             let stop_reason = self.iterations.last().unwrap().stop_reason.clone();
             // we need to check_limits after the iteration is complete to check for iter_limit
             if let Some(stop_reason) = stop_reason.or_else(|| self.check_limits().err()) {
@@ -453,6 +479,7 @@ where
 
         assert!(!self.iterations.is_empty());
         assert!(self.stop_reason.is_some());
+
         self
     }
 
@@ -507,7 +534,10 @@ where
     /// Creates a [`Report`] summarizing this `Runner`s run.
     pub fn report(&self) -> Report {
         Report {
-            stop_reason: self.stop_reason.clone().unwrap(),
+            stop_reason: self
+                .stop_reason
+                .clone()
+                .unwrap_or_else(|| StopReason::Other("Runner has not stopped yet".to_string())),
             iterations: self.iterations.len(),
             egraph_nodes: self.egraph.total_number_of_nodes(),
             egraph_classes: self.egraph.number_of_classes(),

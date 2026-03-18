@@ -46,6 +46,8 @@ mod language;
 #[cfg(feature = "lp")]
 mod lp_extract;
 mod machine;
+#[cfg(feature = "rerun-metrics")]
+mod metrics;
 mod multipattern;
 mod pattern;
 mod rewrite;

@@ -497,11 +497,12 @@ impl<L: Language> RecExpr<L> {
     }
 
     /// Returns an iterator over the [`Id`]s and enodes of this expression.
-    pub fn items_mut(
-        &mut self,
-    ) -> impl ExactSizeIterator<Item = (Id, &mut L)> + DoubleEndedIterator {
-        self.ids().zip(self)
-    }
+    // FIXME: throws error with edition 2024, but not sure why
+    // pub fn items_mut(
+    //     &'a mut self,
+    // ) -> impl ExactSizeIterator<Item = (Id, &mut L)> + DoubleEndedIterator {
+    //     self.ids().zip(self)
+    // }
 
     /// Checks if this expr is a DAG, i.e. doesn't have any back edges
     pub fn is_dag(&self) -> bool {
